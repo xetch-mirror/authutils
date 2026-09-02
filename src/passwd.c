@@ -1,25 +1,26 @@
 #include "userlib.h"
 #include "pass.h"
 #include <stdio.h>
-#include <string.h>
 
-/* Changes the password for the current user (or any user, if current
-   user is admin). Minimal — no old-password re-entry confirmation yet. */
-int passwd_main(const char *target_name, const char *new_password) {
-    user_t *caller = userlib_find_by_uid(userlib_current_uid());
-    user_t *target = userlib_find_by_name(target_name);
+#define USER_INI_PATH "user.ini"
 
-    if (!target) {
+/* Changes a password: verify old one via pass, update in-memory table,
+   then serialize the whole table back to user.ini. */
+int passwd_main(const char *target_name, const char *old_password, const char *new_password) {
+    if (!pass_check(target_name, old_password)) {
+        return 1; /* pass_check already printed "pass is incorrect" */
+    }
+
+    if (!userlib_set_password(target_name, new_password)) {
         printf("passwd: user '%s' not found\n", target_name);
         return 1;
     }
 
-    if (caller->uid != target->uid && !caller->is_admin) {
-        printf("passwd: permission denied\n");
+    if (!userlib_write(USER_INI_PATH)) {
+        printf("passwd: failed to write user.ini\n");
         return 1;
     }
 
-    pass_hash(new_password, target->passhash, sizeof(target->passhash));
-    printf("passwd: password updated for '%s'\n", target->name);
+    printf("passwd: password updated for '%s'\n", target_name);
     return 0;
 }
